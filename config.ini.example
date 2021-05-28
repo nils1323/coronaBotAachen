@@ -1,0 +1,6 @@
+[botdata]
+token=
+chat_id=
+
+[DEFAULT]
+timeBetweenCurls = 900
