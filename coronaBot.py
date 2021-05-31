@@ -200,38 +200,3 @@ dispatcher.add_handler(unknown_handler)
 
 #updater.dispatcher.job_queue.run_daily()
 updater.start_polling()
-exit()
-
-url= "https://api.telegram.org/bot" + token + "/sendMessage"
-
-
-def send(message,chat_id):
-    for chat_id in chat_ids:
-        messageData = {
-            "chat_id":chat_id,
-            "text":message
-        }
-        response = requests.get(url,data=messageData)
-        print(response)
-        time.sleep(1)
-
-def writeConfig():
-    with open('config.ini', 'w') as configfile:
-        config.write(configfile)
-
-def sendHelp(chat_id):
-    send(helpString,chat_id)
-    
-
-
-data = requests.get("https://api.corona-zahlen.org/districts")
-jsonObject = json.loads(data.content)
-datum = str(datetime.strptime(jsonObject["meta"]["lastUpdate"],'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz=None).date())
-lastUpdated = str(datetime.strptime(jsonObject["meta"]["lastCheckedForUpdate"],'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz=None).time().replace(microsecond=0))
-print(datum)
-incidenceAachen = str(jsonObject["data"]["05334"]["weekIncidence"])
-incidenceHagen = str(jsonObject["data"]["05914"]["weekIncidence"])
-incidenceBorken = str(jsonObject["data"]["05554"]["weekIncidence"])
-for chat_id in chat_ids:
-    send("Inzidenzen vom " + datum + " zuletzt um " + lastUpdated + " überprüft.\nAachen: " + incidenceAachen + "\nHagen: " + incidenceHagen + "\nBorken: " + incidenceBorken,chat_id)
-
