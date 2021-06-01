@@ -35,7 +35,6 @@ def updateIncidences():
 
 
 def renewDistrict():
-    updateIncidences()
     try:
         if not os.path.exists(districtCacheFileName):
             open(districtCacheFileName,"x").close()
@@ -52,23 +51,19 @@ def renewDistrict():
         print(sys.exc_info(), " in renewDistrict")
 
 def writeConfig():
-    updateIncidences()
     with open('config.ini', 'w') as configfile:
         config.write(configfile)
 
 def getTime(hour) -> datetime.time:
-    updateIncidences()
     if(len(str(hour))==1):
         hour = "0".join(str(hour))
     time = datetime.strptime(str(hour),"%H")
     print(time.time())
 
 def start(update, context) -> None:
-    updateIncidences()
     context.bot.send_message(chat_id=update.effective_chat.id, text="Ein kleiner Bot um sich regelmäßig die aktuellen Inzidenzen anzeigen zu lassen.")
 
 def register(update, context):
-    updateIncidences()
     #context.bot.send_message(chat_id=update.effective_chat.id, text="You did successfully register.")
     firstname = update.effective_user["first_name"]
     if len(context.args) == 0:
@@ -79,7 +74,6 @@ def register(update, context):
     # https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/timerbot.py
 
 def search(update, context):
-    updateIncidences()
     # search district, to get district number Use cached list
     args= context.args
     if len(args) == 0:
@@ -113,7 +107,6 @@ def search(update, context):
 
 #Adds a district to notification klist
 def add(update, context):
-    updateIncidences()
     reply = ""
     if context.args[0] in districts.values():
         try: 
@@ -135,7 +128,6 @@ def add(update, context):
 
 # remvoe a district from notification list
 def remove(update, context):
-    updateIncidences()
     value = context.args[0]
     reply = ""
     if value in context.bot_data[update.message.chat_id]:
@@ -147,7 +139,6 @@ def remove(update, context):
     update.message.reply_text(reply)
 
 def listf(update, context):
-    updateIncidences()
     reply = "Die folgenden Bezirke stehen auf deiner Liste:\n"
     try: 
         len(context.bot_data[update.message.chat_id])
@@ -170,17 +161,15 @@ def notify(update, context):
         datumOfIncidences = str(datetime.strptime(cachedincidences["meta"]["lastUpdate"],'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz=None).date())
         reply = "Am " + str(datumOfIncidences) + " betragen die Inzidenzen in deinen abonnierten Bezirken die folgenden Werte:\n"
         for bezirknr in context.bot_data[update.message.chat_id]:
-            reply = reply + "In " + inv_districts[bezirknr] + " bei: {0:0.1f}\n".format(cachedincidences["data"][bezirknr]["weekIncidence"])
+            reply = reply +inv_districts[bezirknr] + ": {0:0.1f}\n".format(cachedincidences["data"][bezirknr]["weekIncidence"])
     update.message.reply_text(reply)
 
 def unknown(update, context):
-    updateIncidences()
     context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
 
 #needs to be executed first changes directory to the path of this file
 runPath = pathlib.Path(__file__).parent.absolute()
 os.chdir(runPath)
-updateIncidences()
 config = configparser.ConfigParser()
 config.read("config.ini")
 my_persistence = PicklePersistence(filename='persistent_data.save')
