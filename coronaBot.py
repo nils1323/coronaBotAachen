@@ -63,15 +63,33 @@ def getTime(hour) -> datetime.time:
 def start(update, context) -> None:
     context.bot.send_message(chat_id=update.effective_chat.id, text="Ein kleiner Bot um sich regelmäßig die aktuellen Inzidenzen anzeigen zu lassen.")
 
+def sendTimedUpdate(contextlocal):
+    global updater
+    chat_id = str(contextlocal.job.context)
+    if not str(chat_id) in updater.dispatcher.bot_data:
+        print("")
+
 def register(update, context):
     #context.bot.send_message(chat_id=update.effective_chat.id, text="You did successfully register.")
     firstname = update.effective_user["first_name"]
-    if len(context.args) == 0:
-        update.message.reply_text("Hey, ", firstname , " bitte schreibe \\register [Zeitpunkt als HH oder H] um zu einem bestimmten Zeitpunkt benachrichtigt zu werden.")
-        
     print(context.args)
-    print(firstname)
+    if len(context.args) == 0 or not context.args[0].isnumeric() or int(context.args[0])>23:
+        update.message.reply_text("Hey, bitte schreibe /register [Zeitpunkt als HH oder H] (Zahl zwischen 0 und 23) um zu einem bestimmten Zeitpunkt benachrichtigt zu werden.")
+    elif not str(update.message.chat_id) in context.bot_data:
+        update.message.reply_text("Hey, bitte füge zuerst einen Ort zu deiner Abo-Liste hinzu.")
+    else:
+        current_jobs = context.job_queue.get_jobs_by_name(update.effective_chat.id)
+        if current_jobs:
+            update.message.reply_text("Moin, du kannst hast schon eine getimte Nachricht. Der Einfachheit halber, ist nur eine möglich.")
+        else:
+            context.job_queue.run_daily(sendTimedUpdate, getTime(context.args[0]), days=(0,1,2,3,4,5,6), context=update.message.chat_id)
+            update.message.reply_text("Erfolgreich eine Benachrichtigung für jeden Tag um " + str(getTime(context.args[0]))+ " erstellt.")
+            print(getTime(context.args[0]))
+            print(firstname)
     # https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/timerbot.py
+
+def unregister(update, context):
+    print("abcd")
 
 def search(update, context):
     # search district, to get district number Use cached list
@@ -96,31 +114,29 @@ def search(update, context):
             if len(result) == 0:
                 update.message.reply_text("Es wurden keine Bezirke mit diesem Namen gefunden.")
             else:
-                reply="Die folgenden Bezirke wurden gefunden:\n"
+                reply="Die folgenden Bezirke wurden gefunden\(kopieren durch klicken geht nur auf Smartphones\):\n"
                 for district in result:
                     name,number = district  
                     reply = reply+ str(name).replace("-","\-").replace(".", "\.") +r" mit Nummer `" +"/add " + str(number) + r"` wurde gefunden\." + "\n"
                 reply = reply + ""
                 update.message.reply_text(reply, parse_mode='MarkdownV2')
-        
-        
 
 #Adds a district to notification klist
 def add(update, context):
     reply = ""
     if context.args[0] in districts.values():
         try: 
-            len(context.bot_data[update.message.chat_id])
+            len(context.bot_data[str(update.message.chat_id)])
         except:
             logging.info("No dict for" + str(update.message.chat_id) + " available. Creating one")
-            context.bot_data[update.message.chat_id] = [context.args[0]]
+            context.bot_data[str(update.message.chat_id)] = [context.args[0]]
             #{"0": context.args[0]}
             reply = inv_districts[context.args[0]]+" wurde erfolgreich zu deiner Benachrichtigungsliste hinzugefügt."
         else: 
-            if context.args[0] in context.bot_data[update.message.chat_id]:
+            if context.args[0] in context.bot_data[str(update.message.chat_id)]:
                 reply = inv_districts[context.args[0]] + " steht bereits auf deiner Liste und kann deshalb nicht hinzugefügt werden."
             else:
-                context.bot_data[update.message.chat_id].append(context.args[0])
+                context.bot_data[str(update.message.chat_id)].append(context.args[0])
                 reply = inv_districts[context.args[0]]+" wurde erfolgreich zu deiner Benachrichtigungsliste hinzugefügt."
     else:
         reply = "Ist keine valide Bezirksnummer."
@@ -130,22 +146,22 @@ def add(update, context):
 def remove(update, context):
     value = context.args[0]
     reply = ""
-    if value in context.bot_data[update.message.chat_id]:
-        context.bot_data[update.message.chat_id].remove(value)
+    if value in context.bot_data[str(update.message.chat_id)]:
+        context.bot_data[str(update.message.chat_id)].remove(value)
         reply = inv_districts[value] + " successfully removed."
     else:
         reply = value + " ist nicht auf deiner Liste. du kannst dir deine Liste mit /list anzeigen lassen."
-    logging.debug(context.bot_data[update.message.chat_id])
+    logging.debug(context.bot_data[str(update.message.chat_id)])
     update.message.reply_text(reply)
 
 def listf(update, context):
     reply = "Die folgenden Bezirke stehen auf deiner Liste:\n"
     try: 
-        len(context.bot_data[update.message.chat_id])
+        len(context.bot_data[str(update.message.chat_id)])
     except:
         reply = "Es stehen keine Bezirke auf deiner Liste."
     else:
-        for bezirknr in context.bot_data[update.message.chat_id]:
+        for bezirknr in context.bot_data[str(update.message.chat_id)]:
             reply = reply + inv_districts[bezirknr] + " mit Nummer " + bezirknr + ".\n" 
     update.message.reply_text(reply)
 
@@ -154,13 +170,13 @@ def notify(update, context):
     # one-time notification
     reply = ""
     try: 
-        len(context.bot_data[update.message.chat_id])
+        len(context.bot_data[str(update.message.chat_id)])
     except:
         reply = "Es stehen keine Bezirke auf deiner Liste."
     else:
         datumOfIncidences = str(datetime.strptime(cachedincidences["meta"]["lastUpdate"],'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz=None).date())
         reply = "Am " + str(datumOfIncidences) + " betragen die Inzidenzen in deinen abonnierten Bezirken die folgenden Werte:\n"
-        for bezirknr in context.bot_data[update.message.chat_id]:
+        for bezirknr in context.bot_data[str(update.message.chat_id)]:
             reply = reply +inv_districts[bezirknr] + ": {0:0.1f}\n".format(cachedincidences["data"][bezirknr]["weekIncidence"])
     update.message.reply_text(reply)
 
@@ -191,7 +207,7 @@ inv_districts = {v: k for k, v in districts.items()}
 start_handler = CommandHandler('start', start)
 dispatcher.add_handler(start_handler)
 
-register_handler = CommandHandler("register",register)
+register_handler = CommandHandler("register",register, pass_job_queue=True)
 dispatcher.add_handler(register_handler)
 
 search_handler = CommandHandler("search",search)
@@ -209,9 +225,19 @@ dispatcher.add_handler(notify_handler)
 list_handler = CommandHandler("list",listf)
 dispatcher.add_handler(list_handler)
 
+unregister_handler = CommandHandler("unregister",unregister, pass_job_queue=True)
+dispatcher.add_handler(unregister_handler)
+
 #Last Command
 unknown_handler = MessageHandler(Filters.command, unknown)
 dispatcher.add_handler(unknown_handler)
+
+
+#adjust old keys to new format
+fixedDict={}
+for chat_id in dispatcher.bot_data:
+    fixedDict[str(chat_id)] = dispatcher.bot_data[chat_id]
+dispatcher.bot_data.update(fixedDict)
 
 #updater.dispatcher.job_queue.run_daily()
 updater.start_polling()
