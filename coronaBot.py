@@ -1,6 +1,8 @@
 import requests
 import os
 import pathlib
+import  pytz
+import datetime as rootdatetime
 from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 import time
@@ -16,7 +18,7 @@ import sys
 
 #chat_ids = config["botdata"]["chat_id"].split(",")
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                     level=logging.INFO)
+                     level=logging.DEBUG)
 cachedincidences = ""
 lastcached = ""
 
@@ -54,42 +56,50 @@ def writeConfig():
     with open('config.ini', 'w') as configfile:
         config.write(configfile)
 
-def getTime(hour) -> datetime.time:
-    if(len(str(hour))==1):
-        hour = "0".join(str(hour))
-    time = datetime.strptime(str(hour),"%H")
-    print(time.time())
-
 def start(update, context) -> None:
     context.bot.send_message(chat_id=update.effective_chat.id, text="Ein kleiner Bot um sich regelmäßig die aktuellen Inzidenzen anzeigen zu lassen.")
 
 def sendTimedUpdate(contextlocal):
-    global updater
     chat_id = str(contextlocal.job.context)
-    if not str(chat_id) in updater.dispatcher.bot_data:
-        print("")
+    print("HELLOBELLO "+ chat_id)
+    logging.info("Sending timed message to "+ chat_id)
+    reply= ""
+    if chat_id in updater.dispatcher.bot_data:
+        reply = buildNotificationString(chat_id)
+    if reply == "Es stehen keine Bezirke auf deiner Liste.":
+        logging.info("Es stehen keine Bezirke auf der Liste. Evtl sollte die Job-queue mal wieder geleert werden")
+    else:
+        updater.bot.send_message(chat_id=chat_id, text=reply)
+        logging.debug("successfully send message to: " + chat_id)
 
 def register(update, context):
     #context.bot.send_message(chat_id=update.effective_chat.id, text="You did successfully register.")
     firstname = update.effective_user["first_name"]
+    chat_id = str(update.message.chat_id)
     print(context.args)
     if len(context.args) == 0 or not context.args[0].isnumeric() or int(context.args[0])>23:
         update.message.reply_text("Hey, bitte schreibe /register [Zeitpunkt als HH oder H] (Zahl zwischen 0 und 23) um zu einem bestimmten Zeitpunkt benachrichtigt zu werden.")
     elif not str(update.message.chat_id) in context.bot_data:
         update.message.reply_text("Hey, bitte füge zuerst einen Ort zu deiner Abo-Liste hinzu.")
     else:
-        current_jobs = context.job_queue.get_jobs_by_name(update.effective_chat.id)
+        current_jobs = context.job_queue.get_jobs_by_name(chat_id)
         if current_jobs:
             update.message.reply_text("Moin, du kannst hast schon eine getimte Nachricht. Der Einfachheit halber, ist nur eine möglich.")
         else:
-            context.job_queue.run_daily(sendTimedUpdate, getTime(context.args[0]), days=(0,1,2,3,4,5,6), context=update.message.chat_id)
-            update.message.reply_text("Erfolgreich eine Benachrichtigung für jeden Tag um " + str(getTime(context.args[0]))+ " erstellt.")
-            print(getTime(context.args[0]))
-            print(firstname)
+            key = "job"+chat_id
+            h = int(context.args[0])
+            updater.dispatcher.bot_data[key]= {"hour":h, "chat_id":chat_id}
+            updater.dispatcher.bot_data[key]["hour"] = h
+            updater.dispatcher.bot_data[key]["chat_id"] = chat_id
+            min = 30
+            updater.job_queue.run_daily(sendTimedUpdate, rootdatetime.time(hour=h, minute=min, tzinfo=pytz.timezone('Europe/Berlin')), days=(0,1,2,3,4,5,6), context=update.message.chat_id, name=chat_id)
+            update.message.reply_text("Erfolgreich eine Benachrichtigung für jeden Tag um " + str(h) + ":" + str(min) + " erstellt.")
     # https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/timerbot.py
+    logging.debug("current job-queue: " + str(context.job_queue.get_jobs_by_name(chat_id)))
 
 def unregister(update, context):
-    print("abcd")
+    chat_id = str(update.message.chat_id)
+    print(updater.job_queue.get_jobs_by_name(chat_id)[0].schedule_removal())
 
 def search(update, context):
     # search district, to get district number Use cached list
@@ -166,22 +176,36 @@ def listf(update, context):
     update.message.reply_text(reply)
 
 def notify(update, context):
-    updateIncidences()
-    # one-time notification
+    # one-time notification called with /notify
+    chat_id = str(update.message.chat_id)
+    reply = buildNotificationString(chat_id)
+    update.message.reply_text(reply)
+
+def buildNotificationString(chat_id:str)-> str:
+    global updater
     reply = ""
-    try: 
-        len(context.bot_data[str(update.message.chat_id)])
-    except:
-        reply = "Es stehen keine Bezirke auf deiner Liste."
-    else:
+    updateIncidences()
+    if chat_id in updater.dispatcher.bot_data and len(updater.dispatcher.bot_data[chat_id])>0:
         datumOfIncidences = str(datetime.strptime(cachedincidences["meta"]["lastUpdate"],'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz=None).date())
         reply = "Am " + str(datumOfIncidences) + " betragen die Inzidenzen in deinen abonnierten Bezirken die folgenden Werte:\n"
-        for bezirknr in context.bot_data[str(update.message.chat_id)]:
+        for bezirknr in updater.dispatcher.bot_data[chat_id]:
             reply = reply +inv_districts[bezirknr] + ": {0:0.1f}\n".format(cachedincidences["data"][bezirknr]["weekIncidence"])
-    update.message.reply_text(reply)
+    else: 
+        reply = "Es stehen keine Bezirke auf deiner Liste."
+    return reply
 
 def unknown(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text="Sorry, I didn't understand that command.")
+
+def restoreJobs():
+    logging.info("Current Jobs " + str(updater.dispatcher.bot_data.keys()))
+    for key in updater.dispatcher.bot_data.keys():
+        if "job" in key:
+            h=int(updater.dispatcher.bot_data[key]["hour"])
+            min = 0
+            chat_id = updater.dispatcher.bot_data[key]["chat_id"]
+            updater.job_queue.run_daily(sendTimedUpdate, rootdatetime.time(hour=h, minute=min, tzinfo=pytz.timezone('Europe/Berlin')), days=(0,1,2,3,4,5,6), context=chat_id, name=chat_id)
+
 
 #needs to be executed first changes directory to the path of this file
 runPath = pathlib.Path(__file__).parent.absolute()
@@ -239,6 +263,9 @@ for chat_id in dispatcher.bot_data:
     fixedDict[str(chat_id)] = dispatcher.bot_data[chat_id]
 dispatcher.bot_data.update(fixedDict)
 
+restoreJobs()
+
 #updater.dispatcher.job_queue.run_daily()
 updater.start_polling()
+updater.idle()
 exit()
