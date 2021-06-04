@@ -18,7 +18,7 @@ import sys
 
 #chat_ids = config["botdata"]["chat_id"].split(",")
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-                     level=logging.DEBUG)
+                     level=logging.INFO)
 cachedincidences = ""
 lastcached = ""
 
@@ -84,16 +84,15 @@ def register(update, context):
     else:
         current_jobs = context.job_queue.get_jobs_by_name(chat_id)
         if current_jobs:
-            update.message.reply_text("Moin, du kannst hast schon eine getimte Nachricht. Der Einfachheit halber, ist nur eine möglich.")
-        else:
-            key = "job"+chat_id
-            h = int(context.args[0])
-            updater.dispatcher.bot_data[key]= {"hour":h, "chat_id":chat_id}
-            updater.dispatcher.bot_data[key]["hour"] = h
-            updater.dispatcher.bot_data[key]["chat_id"] = chat_id
-            min = 30
-            updater.job_queue.run_daily(sendTimedUpdate, rootdatetime.time(hour=h, minute=min, tzinfo=pytz.timezone('Europe/Berlin')), days=(0,1,2,3,4,5,6), context=update.message.chat_id, name=chat_id)
-            update.message.reply_text("Erfolgreich eine Benachrichtigung für jeden Tag um " + str(h) + ":" + str(min) + " erstellt.")
+            #a Job exists, remove it and replace it with a new one
+            print(updater.job_queue.get_jobs_by_name(chat_id)[0].schedule_removal())
+            update.message.reply_text("Moin, deine alte getimte Nachricht wurde durch die Neue ersetzt.")
+        key = "job"+chat_id
+        h = int(context.args[0])
+        updater.dispatcher.bot_data[key]= {"hour":h, "chat_id":chat_id}
+        min = 0
+        updater.job_queue.run_daily(sendTimedUpdate, rootdatetime.time(hour=h, minute=min, tzinfo=pytz.timezone('Europe/Berlin')), days=(0,1,2,3,4,5,6), context=update.message.chat_id, name=chat_id)
+        update.message.reply_text("Erfolgreich eine Benachrichtigung für jeden Tag um " + str(h) + " Uhr"  + " erstellt.")
     # https://github.com/python-telegram-bot/python-telegram-bot/blob/master/examples/timerbot.py
     logging.debug("current job-queue: " + str(context.job_queue.get_jobs_by_name(chat_id)))
 
@@ -154,13 +153,16 @@ def add(update, context):
 
 # remvoe a district from notification list
 def remove(update, context):
-    value = context.args[0]
     reply = ""
-    if value in context.bot_data[str(update.message.chat_id)]:
-        context.bot_data[str(update.message.chat_id)].remove(value)
-        reply = inv_districts[value] + " successfully removed."
+    if len(context.args)>0 and len(context.args)<2 and context.args[0].isNumeric():
+        value = context.args[0]
+        if value in context.bot_data[str(update.message.chat_id)]:
+            context.bot_data[str(update.message.chat_id)].remove(value)
+            reply = inv_districts[value] + " successfully removed."
+        else:
+            reply = value + " ist nicht auf deiner Liste. du kannst dir deine Liste mit /list anzeigen lassen."
     else:
-        reply = value + " ist nicht auf deiner Liste. du kannst dir deine Liste mit /list anzeigen lassen."
+        reply = "Bitte gib eine Distriktnummer an :)"
     logging.debug(context.bot_data[str(update.message.chat_id)])
     update.message.reply_text(reply)
 
@@ -200,7 +202,7 @@ def unknown(update, context):
 def restoreJobs():
     logging.info("Current Jobs " + str(updater.dispatcher.bot_data.keys()))
     for key in updater.dispatcher.bot_data.keys():
-        if "job" in key:
+        if "job" in str(key):
             h=int(updater.dispatcher.bot_data[key]["hour"])
             min = 0
             chat_id = updater.dispatcher.bot_data[key]["chat_id"]
@@ -261,6 +263,8 @@ dispatcher.add_handler(unknown_handler)
 fixedDict={}
 for chat_id in dispatcher.bot_data:
     fixedDict[str(chat_id)] = dispatcher.bot_data[chat_id]
+    if isinstance(chat_id,int):
+        fixedDict.pop(chat_id,None)
 dispatcher.bot_data.update(fixedDict)
 
 restoreJobs()
