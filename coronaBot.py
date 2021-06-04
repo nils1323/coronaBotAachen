@@ -34,6 +34,6 @@ datum = str(datetime.strptime(jsonObject["meta"]["lastUpdate"],'%Y-%m-%dT%H:%M:%
 lastUpdated = str(datetime.strptime(jsonObject["meta"]["lastCheckedForUpdate"],'%Y-%m-%dT%H:%M:%S.%fZ').replace(tzinfo=timezone.utc).astimezone(tz=None).time().replace(microsecond=0))
 print(datum)
 incidenceAachen = str(jsonObject["data"]["05334"]["weekIncidence"])
-incidenceHagen = str(jsonObject["data"]["05914"]["weekIncidence"])
-send("Inzidenzen vom " + datum + " zuletzt um " + lastUpdated + " überprüft.\nAachen: " + incidenceAachen + "\nHagen: " + incidenceHagen)
+incidenceBorken = str(jsonObject["data"]["05554"]["weekIncidence"])
+send("Inzidenzen vom " + datum + " zuletzt um " + lastUpdated + " überprüft.\nAachen: " + incidenceAachen + "\nBorken: " + incidenceBorken)
 
