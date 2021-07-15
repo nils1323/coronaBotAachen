@@ -1,3 +1,4 @@
+import re
 import requests
 import os
 import pathlib
@@ -116,24 +117,53 @@ def search(update, context):
         elif len(suchbegriff)>50:
             update.message.reply_text("Alter.... jetzt troll doch nicht....")
         else:
-            result = []
-            for district in districts:
-                if suchbegriff.upper() in district.upper():
-                    result.append((district, districts[district]))
+            result = search_to_list(suchbegriff=suchbegriff)
             if len(result) == 0:
-                update.message.reply_text("Es wurden keine Bezirke mit diesem Namen gefunden.")
+                reply = "Keine Bezirke gefunden."
             else:
                 reply="Die folgenden Bezirke wurden gefunden\(kopieren durch klicken geht nur auf Smartphones\):\n"
                 for district in result:
                     name,number = district  
                     reply = reply+ str(name).replace("-","\-").replace(".", "\.") +r" mit Nummer `" +"/add " + str(number) + r"` wurde gefunden\." + "\n"
                 reply = reply + ""
-                update.message.reply_text(reply, parse_mode='MarkdownV2')
+            update.message.reply_text(reply, parse_mode='MarkdownV2')
+
+def search_to_list(suchbegriff:str)->list:
+    if len(suchbegriff)<2:
+        return []
+    result = []
+    for district in districts:
+        if suchbegriff.upper() in district.upper():
+            #(Name,Nummer)
+            result.append((district, districts[district]))
+    return result
+
 
 #Adds a district to notification klist
 def add(update, context):
     reply = ""
-    if context.args[0] in districts.values():
+    print(0 in context.args)
+    if len(context.args)>0 and not context.args[0].isnumeric():
+        suchbegriff = ""
+        logging.info("searched for " + str(context.args))
+        for begriff in context.args:
+            suchbegriff =suchbegriff+" " + begriff
+        suchbegriff = suchbegriff[1:]
+        result = search_to_list(suchbegriff=suchbegriff)
+        logging.info(result)
+        if len(result)==0:
+            reply = "Kein Landkreis mit diesem Namen."
+        elif len(result)>1:
+            reply = "Kein eindeutiges Ergbnis bitte nutze /search um mehr ergbnisse zu erhalten."
+        else:
+            if not str(update.message.chat_id) in context.bot_data:
+                context.bot_data[str(update.message.chat_id)] = []
+            if districts[result[0][0]] in context.bot_data[str(update.message.chat_id)]:
+                reply = result[0][0] + " ist bereits auf deiner Liste."
+            else:
+                context.bot_data[str(update.message.chat_id)].append(districts[result[0][0]])
+                reply = result[0][0]+ " wurde erfolgreich deinen Benachrichtigungen hinzugefügt."
+    elif len(context.args)>0 and context.args[0] in districts.values():
         try: 
             len(context.bot_data[str(update.message.chat_id)])
         except:
@@ -147,14 +177,16 @@ def add(update, context):
             else:
                 context.bot_data[str(update.message.chat_id)].append(context.args[0])
                 reply = inv_districts[context.args[0]]+" wurde erfolgreich zu deiner Benachrichtigungsliste hinzugefügt."
+    elif len(context.args)==0:
+        reply = "Keinen Landkreis mit diesem Namen oder Nummer gefunden."
     else:
-        reply = "Ist keine valide Bezirksnummer."
+        reply = "Ist kein Name oder suchbegriff."
     update.message.reply_text(reply)
 
 # remvoe a district from notification list
 def remove(update, context):
     reply = ""
-    if len(context.args)>0 and len(context.args)<2 and context.args[0].isNumeric():
+    if len(context.args)>0 and len(context.args)<2 and context.args[0].isnumeric():
         value = context.args[0]
         if value in context.bot_data[str(update.message.chat_id)]:
             context.bot_data[str(update.message.chat_id)].remove(value)
@@ -226,7 +258,9 @@ dispatcher = updater.dispatcher
 #Check if district are already cached and cache them if neccessary
 if not os.path.exists(districtCacheFileName):
     renewDistrict()
+#Name:Nummer
 districts = eval(open(districtCacheFileName,"r").read())
+#Nummer:Name
 inv_districts = {v: k for k, v in districts.items()}
 
 
