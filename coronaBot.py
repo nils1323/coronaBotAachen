@@ -119,7 +119,7 @@ def search(update, context):
         else:
             result = search_to_list(suchbegriff=suchbegriff)
             if len(result) == 0:
-                reply = "Keine Bezirke gefunden."
+                reply = "Keine Bezirke gefunden"
             else:
                 reply="Die folgenden Bezirke wurden gefunden\(kopieren durch klicken geht nur auf Smartphones\):\n"
                 for district in result:
